@@ -1,0 +1,86 @@
+# =========================
+# Build outputs / CMake
+# =========================
+build/
+**/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+*_artefacts/
+**/*_artefacts/
+
+# =========================
+# Plugin binaries & bundles
+# =========================
+*.vst3
+*.component
+*.app
+*.dll
+*.dylib
+*.so
+*.exe
+*.lib
+*.a
+*.exp
+
+# =========================
+# Object files / debug symbols
+# =========================
+*.o
+*.obj
+*.pdb
+*.ipdb
+*.iobj
+*.idb
+
+# =========================
+# IDE / editor files
+# =========================
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.VC.db
+*.opendb
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+.idea/
+
+# =========================
+# OS junk
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs / caches / user files
+# =========================
+*.log
+*.cache
+*.user
+
+# =========================
+# JUCE source tree (should not be in repo)
+# =========================
+JUCE/
+juce/
+juce_modules/
+
+# =========================
+# Common build folders
+# =========================
+Debug/
+Release/
+bin/
+obj/
+
+# =========================
+# Xcode (generated)
+# =========================
+*.xcodeproj
+*.xcworkspace
+DerivedData/
