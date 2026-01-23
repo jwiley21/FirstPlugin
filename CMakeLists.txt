@@ -4,9 +4,6 @@ project(OrbitalPan VERSION 0.1.0 LANGUAGES CXX)
 
 # If you have JUCE installed locally, set JUCE_DIR to that path when configuring CMake.
 # Example: cmake -B build -S . -DJUCE_DIR=/path/to/JUCE
-if (NOT DEFINED JUCE_DIR AND WIN32 AND EXISTS "C:/JUCE/JUCE/CMakeLists.txt")
-    set(JUCE_DIR "C:/JUCE/JUCE" CACHE PATH "Path to JUCE")
-endif()
 
 if (DEFINED JUCE_DIR)
     add_subdirectory(${JUCE_DIR} JUCE)
@@ -77,10 +74,14 @@ target_link_libraries(OrbitalPan
 )
 
 option(ORBITALPAN_COPY_VST3_TO_COMMON "Copy VST3 to system VST3 folder after build" OFF)
+set(ORBITALPAN_VST3_DEST_DIR "" CACHE PATH "Destination VST3 directory for post-build copy")
 if (WIN32 AND ORBITALPAN_COPY_VST3_TO_COMMON)
+    if (NOT ORBITALPAN_VST3_DEST_DIR)
+        message(FATAL_ERROR "Set ORBITALPAN_VST3_DEST_DIR to the target VST3 folder before enabling ORBITALPAN_COPY_VST3_TO_COMMON")
+    endif()
     # Copies the full .vst3 bundle directory. Requires write access to Program Files.
     set(VST3_BUNDLE_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/OrbitalPan_artefacts/$<CONFIG>/VST3/OrbitalPan.vst3")
-    set(VST3_BUNDLE_DEST "C:/Program Files/Common Files/VST3/OrbitalPan.vst3")
+    set(VST3_BUNDLE_DEST "${ORBITALPAN_VST3_DEST_DIR}/OrbitalPan.vst3")
     add_custom_command(TARGET OrbitalPan_VST3 POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${VST3_BUNDLE_SOURCE}" "${VST3_BUNDLE_DEST}"
         COMMENT "Copying OrbitalPan.vst3 to the system VST3 folder (disable with ORBITALPAN_COPY_VST3_TO_COMMON=OFF)"
