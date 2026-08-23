@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cmath>
 
 namespace
 {
@@ -89,6 +90,14 @@ void OrbitalPanAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBl
 
     dryBuffer.setSize(2, samplesPerBlock, false, false, true);
 
+    const int downsampleFactor = juce::jlimit(
+        ScopeConstants::minDownsample,
+        ScopeConstants::maxDownsample,
+        static_cast<int>(std::round(sampleRate / ScopeConstants::targetRateHz)));
+
+    scopeInputBuffer.prepare(ScopeConstants::bufferSize, downsampleFactor);
+    scopeOutputBuffer.prepare(ScopeConstants::bufferSize, downsampleFactor);
+
     juce::dsp::ProcessSpec spec;
     spec.sampleRate = sampleRate;
     spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
@@ -137,6 +146,8 @@ void OrbitalPanAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
     dryBuffer.makeCopyOf(buffer, true);
 
+    scopeInputBuffer.push(dryBuffer.getReadPointer(0), dryBuffer.getReadPointer(1), buffer.getNumSamples());
+
     posXSmoothed.setTargetValue(*apvts.getRawParameterValue("PosX"));
     posYSmoothed.setTargetValue(*apvts.getRawParameterValue("PosY"));
     depthSmoothed.setTargetValue(*apvts.getRawParameterValue("Depth"));
@@ -184,6 +195,8 @@ void OrbitalPanAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         wetL[sample] = dryL[sample] + (processedL - dryL[sample]) * mix;
         wetR[sample] = dryR[sample] + (processedR - dryR[sample]) * mix;
     }
+
+    scopeOutputBuffer.push(wetL, wetR, buffer.getNumSamples());
 }
 
 bool OrbitalPanAudioProcessor::hasEditor() const

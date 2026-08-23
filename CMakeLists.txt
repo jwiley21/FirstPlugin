@@ -52,6 +52,7 @@ target_sources(OrbitalPan
         Source/PluginProcessor.h
         Source/PluginEditor.cpp
         Source/PluginEditor.h
+        Source/ScopeBuffer.h
 )
 
 target_compile_features(OrbitalPan PUBLIC cxx_std_17)

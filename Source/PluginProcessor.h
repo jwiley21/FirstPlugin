@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
+#include "ScopeBuffer.h"
 
 class OrbitalPanAudioProcessor : public juce::AudioProcessor
 {
@@ -39,6 +40,9 @@ public:
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
+    ScopeBuffer& getScopeInputBuffer() noexcept { return scopeInputBuffer; }
+    ScopeBuffer& getScopeOutputBuffer() noexcept { return scopeOutputBuffer; }
+
 private:
     void updateFiltersAndReverb(float posY, float depth);
 
@@ -58,6 +62,9 @@ private:
     juce::Reverb::Parameters reverbParams;
 
     double currentSampleRate = 44100.0;
+
+    ScopeBuffer scopeInputBuffer;
+    ScopeBuffer scopeOutputBuffer;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OrbitalPanAudioProcessor)
 };
