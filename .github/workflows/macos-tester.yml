@@ -45,7 +45,8 @@ jobs:
         run: |
           bundle='build/mac-tester/OrbitalPan_artefacts/Release/VST3/OrbitalPan.vst3'
           binary="$bundle/Contents/MacOS/OrbitalPan"
-          lipo -verify_arch arm64 x86_64 "$binary"
+          # Everything after -verify_arch is parsed as an architecture name.
+          lipo "$binary" -verify_arch arm64 x86_64
           # Ad-hoc signing permits local code loading on Apple silicon.
           # This is a tester build, not Developer ID signing or notarization.
           codesign --force --sign - --timestamp=none "$bundle"
