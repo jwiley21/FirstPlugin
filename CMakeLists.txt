@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OrbitalPan VERSION 0.2.0 LANGUAGES CXX)
+# JUCE adds C sources to our targets, so enable C in this top-level scope too.
+# Enabling it only inside JUCE leaves Make/Ninja without C compile rules here.
+project(OrbitalPan VERSION 0.2.0 LANGUAGES C CXX)
 
 # If you have JUCE installed locally, set JUCE_DIR to that path when configuring CMake.
 # Example: cmake -B build -S . -DJUCE_DIR=/path/to/JUCE
