@@ -73,6 +73,19 @@ if (ORBITALPAN_BUILD_TESTS)
         juce::juce_audio_processors juce::juce_dsp juce::juce_gui_extra
         juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
     add_test(NAME OrbitalPanAudioTests COMMAND OrbitalPanTests)
+
+    # Load the compiled VST3 through a host, including renamed/extracted packages.
+    juce_add_console_app(OrbitalPanPluginLoadTests PRODUCT_NAME "OrbitalPan Plugin Load Tests")
+    target_sources(OrbitalPanPluginLoadTests PRIVATE Tests/PluginLoadTests.cpp)
+    target_compile_features(OrbitalPanPluginLoadTests PRIVATE cxx_std_17)
+    target_compile_definitions(OrbitalPanPluginLoadTests PRIVATE
+        JUCE_PLUGINHOST_VST3=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(OrbitalPanPluginLoadTests PRIVATE
+        juce::juce_audio_processors juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+    add_dependencies(OrbitalPanPluginLoadTests OrbitalPan_VST3)
+    add_test(NAME OrbitalPanPluginLoadTests COMMAND OrbitalPanPluginLoadTests
+        "$<TARGET_GENEX_EVAL:OrbitalPan_VST3,$<TARGET_PROPERTY:OrbitalPan_VST3,JUCE_PLUGIN_ARTEFACT_FILE>>" "${PROJECT_VERSION}")
 endif()
 
 target_compile_features(OrbitalPan PUBLIC cxx_std_17)

@@ -29,11 +29,27 @@ The [Mac tester workflow](.github/workflows/macos-tester.yml) builds a universal
 
 1. Push the source changes and `.github/workflows/macos-tester.yml` to `main` on GitHub.
 2. Open the repository's **Actions** tab and select **Build Mac tester download**. It starts automatically after the push; **Run workflow** can also start a new build.
-3. Wait for a green run. The workflow builds the plugin, runs the audio regression suite on an Apple silicon Mac runner, checks that both CPU architectures are present, and packages the bundle.
+3. Wait for a green run. The workflow builds the plugin, runs audio regressions on Apple silicon and Intel code under Rosetta, checks both architectures and minimum OS versions, and loads the renamed VST3 after extracting the final ZIP (including audio, state and editor smoke tests).
 4. Download the versioned **OrbitalPan-v…-macOS-Universal.zip** from the run's **Artifacts** section. Downloads are retained for 30 days. You can send the ZIP directly to your friend, so he does not need GitHub access.
-5. He extracts it and follows `READ-ME-FIRST.txt`: move older OrbitalPan bundles out of both user/system VST3 folders, then copy the new **versioned `.vst3` bundle** into `~/Library/Audio/Plug-Ins/VST3/`, then enable VST3 system folders and rescan in Live. The package targets macOS 11 or later; the DAW's own requirements also apply.
+5. He extracts it and follows `READ-ME-FIRST.txt`: move older OrbitalPan bundles out of both user/system VST3 folders, then copy the new **versioned `.vst3` bundle** into `~/Library/Audio/Plug-Ins/VST3/`, then enable VST3 system folders and rescan in Live. The package targets Intel macOS 10.13+ and Apple silicon macOS 11+; Live 10.1+ is required for VST3 (Live 11.1+ for native Apple silicon). The DAW's own OS requirements also apply.
 
 This workflow produces an **ad-hoc signed tester build**, not a Developer ID signed/notarized public release. macOS may block a downloaded tester build; the included [tester instructions](packaging/MAC-TESTER-README.txt) explain a narrowly scoped workaround for this plugin. A smoother public download requires Developer ID signing and Apple notarization. The Windows ZIP cannot be used on a Mac.
+
+**Greyed-out file or “wrong file type”?** A `.vst3` is a plugin bundle, not a
+Live Set or an application. Copy the complete bundle with Finder into the VST3
+folder; enable system VST3 folders and load OrbitalPan from Live's **Plug-ins**
+browser. Do not use Open/Import or select the `.vst3` in a folder chooser.
+Download the **Mac tester artifact**, not Code > Download ZIP (source), a
+Windows build, or `__MACOSX` metadata. Live before 10.1 cannot load VST3.
+An exact error, Mac chip/macOS version, Live version and build ID are needed
+to distinguish a format problem from quarantine or a stale install.
+
+**Why keep the ZIP?** A macOS `.vst3` looks like one file in Finder but is a
+directory containing code and resources. GitHub cannot deliver that directory
+as one raw `.vst3` file while preserving the bundle. The ZIP preserves it;
+a disk image (`.dmg`) or installer (`.pkg`) could be added in a future task.
+This update keeps ZIP delivery. `archive: false` uploads the already-created
+ZIP directly, avoiding an extra outer ZIP.
 
 GitHub supplies [Mac runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), and JUCE supports [universal CMake builds](https://github.com/juce-framework/JUCE/blob/8.0.12/docs/CMake%20API.md). Apple's [Developer ID documentation](https://developer.apple.com/developer-id/) explains signing downloaded plug-ins. The compilation instructions below remain available for anyone who prefers building locally.
 
@@ -43,13 +59,13 @@ GitHub supplies [Mac runners](https://docs.github.com/en/actions/reference/runne
 work, and tester feedback. [AGENTS.md](AGENTS.md) tells future AI contributors how
 to maintain it. [CHANGELOG.md](CHANGELOG.md) records changes by release version.
 
-`VERSION` is the source of the release number, currently `0.2.1`. CMake uses it
+`VERSION` is the source of the release number, currently `0.2.2`. CMake uses it
 for the plugin's version metadata and visible header. Each GitHub build also gets
 an automatic ID using the workflow run number, rerun attempt, and short commit.
 For example (illustrative):
 
 ```text
-OrbitalPan-v0.2.1-b12.1-abc1234-macOS-Universal.zip
+OrbitalPan-v0.2.2-b12.1-abc1234-macOS-Universal.zip
 ```
 
 The next push gets a different build number even if VERSION is unchanged.
@@ -61,7 +77,7 @@ plugin header shows the same version/build so testers can spot a stale install.
 The actual plugin inside that ZIP is named:
 
 ```text
-OrbitalPan-v0.2.1-b12.1-abc1234.vst3
+OrbitalPan-v0.2.2-b12.1-abc1234.vst3
 ```
 
 The version/build appears on the **ZIP, enclosing folder, actual .vst3 bundle,

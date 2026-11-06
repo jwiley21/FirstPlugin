@@ -48,6 +48,18 @@ CMake must enable both C and CXX in the top-level project (JUCE includes C files
 On macOS use `lipo "$binary" -verify_arch arm64 x86_64`: the input must precede
 `-verify_arch`. The Mac workflow is ad-hoc signed for testers, not notarized.
 
+The Mac tester package targets Intel macOS 10.13+ and Apple silicon macOS 11+.
+Verify the actual Mach-O minimum for each architecture; do not infer support
+from the runner's OS or a successful compile. Run the existing audio suite
+and load the renamed bundle after extracting the final ZIP in both native
+arm64 and x86_64 (Rosetta) modes before upload. Verify its signature, executable
+permissions, stable bundle identity, version, and system-only dependencies.
+Rosetta checks do not establish native Intel hardware or older-macOS coverage.
+Ableton must support VST3 (Live 10.1+; native Apple silicon Live 11.1+).
+Do not call a greyed file a confirmed binary defect without the exact error.
+Keep the Mac download as a ZIP unless the user requests a distribution change:
+a macOS .vst3 is a directory bundle, not a single raw downloadable file.
+
 Keep audio processing allocation-free. Preserve zero-width transparency, width's
 mono-sum behavior, and legacy state migration. Do not claim that preserving the
 width stage's mono sum makes all spatial processing transparent.

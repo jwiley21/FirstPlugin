@@ -1,9 +1,11 @@
 OrbitalPan v@PROJECT_VERSION@ - Mac tester build @ORBITALPAN_EFFECTIVE_BUILD_ID@
 ============================
 
-This download contains a compiled VST3 plugin for Intel and Apple silicon
-Macs running macOS 11 or later. No Xcode, Homebrew, or compilation is needed.
-The DAW must also support your macOS version. This is a test build.
+This universal VST3 targets Intel Macs on macOS 10.13 or later and Apple
+silicon Macs on macOS 11 or later. Ableton Live 10.1 or later is required
+for VST3; native Apple silicon Live requires Live 11.1 or later.
+Your Live version's own macOS requirements apply. No Xcode, Homebrew, or
+compilation is needed. This is a test build; not every OS/host has been tested.
 
 IDENTIFY YOUR VERSION
 
@@ -25,6 +27,8 @@ INSTALL IN ABLETON LIVE
 1. Quit Ableton Live.
 2. Unzip the download. Keep the versioned .vst3 as a complete bundle;
    do not copy files out of its Contents folder.
+   Use the Mac tester artifact, NOT GitHub's Code > Download ZIP (source
+   code), a Windows build, or files from inside __MACOSX.
 3. In Finder, press Command+Shift+G, paste this path, and press Return:
 
    ~/Library/Audio/Plug-Ins/
@@ -41,6 +45,7 @@ INSTALL IN ABLETON LIVE
    @ORBITALPAN_PACKAGE_PREFIX@.vst3
 6. Open Live > Settings > Plug-Ins. Enable Use VST3 Plug-In System Folders.
    Rescan and search for OrbitalPan in Live's browser.
+   Drag OrbitalPan from Live's Plug-ins browser onto an audio track.
 7. Open the plugin and compare its top-row version/build with BUILD-INFO.txt.
    If they differ, check for an older duplicate in this system-wide folder:
 
@@ -53,6 +58,19 @@ If your Library does not contain Audio/Plug-Ins yet, open Terminal and run:
 
 mkdir -p "$HOME/Library/Audio/Plug-Ins/VST3"
 open "$HOME/Library/Audio/Plug-Ins/VST3"
+
+GREY FILE / WRONG FILE TYPE / CANNOT OPEN
+
+The .vst3 is a plugin bundle, not an app, song, or installer. Do not double-click
+it or use Live's Open/Import dialog. A folder chooser may grey out the .vst3
+because it accepts folders, not plugin files. Copy it in Finder as above;
+Live discovers it when scanning. You do not need a custom plugin folder.
+
+If Live still reports an invalid format after installation, send the exact
+message and where it appears, BUILD-INFO.txt, your macOS and chip from Apple
+menu > About This Mac, and your Live version from About Live. A Windows .vst3
+cannot run on a Mac even though it has the same extension. Live before 10.1
+cannot load VST3. Do not rename a ZIP to .vst3 or copy only the inner executable.
 
 MACOS MAY BLOCK THIS TEST BUILD
 
@@ -88,5 +106,7 @@ Keep your original project and old plugin available while comparing versions.
 Send feedback with your Mac chip, macOS version, Live version, sample rate,
 buffer size, what you were doing, and BUILD-INFO.txt from this download.
 
-The automated suite runs on the build Mac's native CPU. Both CPU architectures
-are included, but this does not replace testing in Live on your own machine.
+Before upload, CI checks the extracted ZIP's bundle, signature, deployment
+targets, permissions and dependencies, and loads/processes audio with its
+actual versioned VST3 on Apple silicon and Intel code under Rosetta. Audio
+regressions also run in both modes. This is not an Ableton or older-macOS test.

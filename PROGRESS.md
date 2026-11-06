@@ -1,77 +1,61 @@
 # OrbitalPan progress and AI handoff
 
-Last updated: 2026-11-06. Read this file at the start of a task and update it
-before handing work back. Release history lives in `CHANGELOG.md`.
+Last updated: 2026-11-06. Read this before working; history is in CHANGELOG.md.
 
 ## Current state
 
-- Source version: **0.2.1** (see `VERSION`). Version identification work is local
-  and has not yet been pushed or built by GitHub.
-- Last known successful Mac tester build: **0.2.0**, after commit `d3c40da`.
-  Evidence: the user reported that the workflow worked. Do not infer that the
-  DJ has completed audio/automation tests from that report.
-- Product: JUCE 8.0.12 / C++17 stereo VST3, named OrbitalPan.
+- Source version: **0.2.2**, Mac compatibility/package verification update.
 - Repository: https://github.com/jwiley21/FirstPlugin, branch `main`.
-- The user develops on Windows; their DJ friend tests in Ableton on a Mac.
+- Confirmed prior Mac artifact: **0.2.1-b4.1-881a368**, successful run:
+  https://github.com/jwiley21/FirstPlugin/actions/runs/42189669734.
+  The previous handoff's claim that 0.2.1 was unpushed was stale.
+- Product: JUCE 8.0.12 / C++17 stereo VST3. Windows developer, Mac/Ableton tester.
 
-## Current task: make tester versions identifiable
+## Current task: Mac installation and a distinct tester update
 
-Implemented locally:
+Tester saw a grey file and an approximate file format/type error. Exact error,
+step, chip, macOS and Live version are unknown. No root cause or successful
+Ableton install/listening test is confirmed.
 
-- `VERSION` is the semantic-version source of truth for CMake/JUCE and the UI.
-- Header shows `OrbitalPan v0.2.1` and the exact build ID.
-- Every push to main triggers a Mac build with a new workflow number. Reruns also
-  get a distinct attempt number: `b12.1-abc1234` is an illustrative example.
-- Download and folder names follow:
-  `OrbitalPan-v0.2.1-b12.1-abc1234-macOS-Universal.zip`.
-- ZIP includes BUILD-INFO.txt, CHANGELOG.md, source commit, and install guidance.
-- The user explicitly clarified that the actual .vst3 filename must be versioned,
-  e.g. `OrbitalPan-v0.2.1-b12.1-abc1234.vst3`, not only the ZIP filename.
-- Internal plugin IDs remain stable; testers must remove prior bundles from both
-  scanned VST3 folders because differently named versions still share that ID.
-- AI maintenance instructions added to `AGENTS.md`.
+Implemented for 0.2.2:
 
-Validation completed locally:
+- Intel deployment target lowered from 11.0 to 10.13; arm64 stays at 11.0.
+- Host smoke test scans compiled VST3, verifies name/version, instantiates,
+  processes stereo audio, restores state, and creates its editor.
+- Mac CI runs audio regressions natively and under x86_64 Rosetta.
+- Extracts final ZIP, verifies identity/version, executable bit, signature,
+  architectures, per-slice minimum OS and system-only dependencies; loads the
+  actual versioned extracted bundle in both architecture modes.
+- Expanded installation and grey-file/wrong-download troubleshooting.
+- Version/build stays on ZIP/folder/.vst3/header; IDs/parameters/DSP unchanged.
+  ZIP remains the delivery format as the user requested.
 
-- Windows x64 Release VST3 and test executable built successfully with MSVC/JUCE.
-- CTest: 1 suite passed, 0 failed. The existing audio tests all passed.
-- Inspected `build/quality/OrbitalPan-v0.2.1-preview.png`: version/build header is
-  visible and the controls/scope remain correctly laid out.
-- VST3 module metadata reports 0.2.1.
-- Generated metadata/header/install instructions agree with the .vst3 filename
-  for three sample build IDs (new pushes and reruns yield different names).
-- Malformed semantic versions and unsafe build IDs are rejected by CMake.
-- Workflow YAML and all shell steps pass local syntax checks; git diff check passes.
-- Renamed Mac bundle signing/loading and the updated upload still need the next
-  GitHub run and a tester check in Ableton. Do not claim these passed locally.
+Checks so far:
 
-## Completed foundations
+- Local YAML parsed, all five Bash steps passed bash -n, Python syntax passed.
+- git diff --check passed.
+- Windows build attempt blocked: VS 2026 is present but development environment
+  discovery fails and compiler headers are missing. No new Windows test success.
+- Mac checks await GitHub. Do not infer success from configured tests.
 
-- 0.2.0 added Width and frequency-based scope colours; see CHANGELOG.md.
-- Windows Release build and audio tests previously passed at 44.1/48/96/192 kHz.
-- Fixed two Mac workflow errors: CMAKE_C_COMPILE_OBJECT (enable C at project root)
-  and lipo parsing (put binary path before -verify_arch).
-- Mac workflow compiles a universal arm64/x86_64 bundle and runs tests natively on
-  its Apple silicon runner. Ad-hoc signing is used; Apple notarization is absent.
+## Remaining work and constraints
 
-## Remaining work and known constraints
+- Build/download 0.2.2 in GitHub; record actual result and build ID here.
+- Confirm installation/playback on the client's actual macOS/Live version.
+- Targeting 10.13 does not prove every old Intel Mac works. Rosetta tests do not
+  replace native Intel hardware or older-macOS testing.
+- Ad-hoc signed, not Developer ID signed/notarized. Download quarantine may
+  still require the narrow plugin-specific workaround in READ-ME-FIRST.txt.
+- VST3 needs Live 10.1+ (native Apple silicon Live 11.1+).
+- Keep one OrbitalPan*.vst3 across both user/system scanned folders. Move older
+  versions elsewhere because all share one internal plugin identity.
+- Prior 0.2.0 Windows DSP results are historical; DJ listening, automation,
+  CPU, mono playback and project recall are still unconfirmed.
+- Old sessions may change level/timing versus 0.1.0 due to 0.2.0 bug fixes.
 
-- Push 0.2.1 and verify the versioned Mac artifact and header match in Ableton.
-- Await DJ feedback on width sound, mono playback, gain, CPU, automation, and
-  project recall. No completed listening-test report has been provided yet.
-- Keep only one OrbitalPan*.vst3 installed across the user's and system's VST3
-  folders. Old copies/cached instances were a source of tester confusion.
-- Old sessions may change level/timing because 0.2.0 fixed gain and reverb bugs.
-- Public distribution still needs signing/notarization and broader host testing.
-- Potential next improvements: output trim/meters, keyboard XY control, UI scaling.
-  These are backlog ideas, not completed or authorized active tasks.
+## Feedback to collect
 
-## Feedback record (fill in when received)
-
-- Version and build ID from the plugin header or BUILD-INFO.txt:
-- Mac chip / macOS / Ableton versions:
-- Sample rate / buffer size:
-- Source audio and parameter settings:
-- Expected result / actual result / reproduction steps:
-- Outcome: unconfirmed / reproduced / fixed / tester verified:
-- Fix version and evidence:
+- Version/build from header or BUILD-INFO.txt and exact downloaded filename.
+- Mac chip, macOS and Live versions; exact error and step where it appeared.
+- Sample rate/buffer, audio/settings, expected/actual result, reproduction.
+- Outcome/evidence: unconfirmed / reproduced / fixed / tester-confirmed.

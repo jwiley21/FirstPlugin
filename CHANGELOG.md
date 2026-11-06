@@ -5,6 +5,22 @@ individual pushes and reruns, even when they have the same semantic version.
 `VERSION` is authoritative for the current source tree. A version entry records
 changes; it does not by itself mean a binary has been published or tested in a DAW.
 
+## 0.2.2 — Mac compatibility and package verification
+
+- Broadened the Intel deployment target from macOS 11 to macOS 10.13;
+  Apple silicon still requires macOS 11+. The host's OS requirements also apply.
+- Added a VST3 host smoke test for discovery, reported version, instantiation,
+  stereo audio processing, state restore, and editor creation.
+- Mac CI now runs audio regressions natively and as x86_64 under Rosetta,
+  then loads both slices of the versioned bundle extracted from the final ZIP.
+- Packaging checks the extracted signature, executable permissions, stable
+  bundle ID, version, both Mach-O minimum OS versions, and system dependencies.
+- Clarified greyed-out files, wrong downloads, Live's VST3 requirement (10.1+),
+  installation, and the existing plugin-specific quarantine workaround.
+- Kept the version/build in the ZIP, folder, actual .vst3, and plugin header.
+  Internal identity, parameters and DSP are unchanged. Still an ad-hoc signed,
+  non-notarized tester build; older macOS and Ableton need tester confirmation.
+
 ## 0.2.1 — version identification and tester handoff
 
 - Added a visible version and build ID above the plugin's controls.

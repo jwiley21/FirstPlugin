@@ -4,6 +4,8 @@ Plugin file: @ORBITALPAN_PACKAGE_PREFIX@.vst3
 Source commit: @ORBITALPAN_SOURCE_COMMIT@
 Uncommitted source changes: @ORBITALPAN_SOURCE_MODIFIED@
 Platform: @CMAKE_SYSTEM_NAME@
+Configured macOS deployment target: @CMAKE_OSX_DEPLOYMENT_TARGET@
+Configured macOS architectures: @CMAKE_OSX_ARCHITECTURES@
 
 The plugin's top row must show the same version and build listed here.
 If it differs, your DAW loaded another installed copy. Quit the DAW, replace
