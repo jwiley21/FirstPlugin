@@ -25,6 +25,12 @@ Current project details:
 
 ## Send a compiled Mac build to a tester
 
+Latest verified tester download: **[OrbitalPan 0.2.2, build b7.1-b6903ff](https://github.com/jwiley21/FirstPlugin/actions/runs/42260131512/artifacts/13524528678)**
+(GitHub artifact retained until December 6, 2026). Its actual bundle is
+`OrbitalPan-v0.2.2-b7.1-b6903ff.vst3`. Mac CI passed native/Rosetta audio tests
+and loaded the extracted versioned bundle in both modes. This is not yet
+tester-confirmed in Ableton or on older macOS. You can forward the ZIP directly.
+
 The [Mac tester workflow](.github/workflows/macos-tester.yml) builds a universal VST3 containing both Apple silicon (`arm64`) and Intel (`x86_64`) code. Your tester does **not** need to compile it or install development tools. The original 0.2.0 Mac workflow succeeded (reported by the user). Each new update still needs its own successful run before its download is available.
 
 1. Push the source changes and `.github/workflows/macos-tester.yml` to `main` on GitHub.

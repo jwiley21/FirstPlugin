@@ -5,6 +5,12 @@ Last updated: 2026-11-06. Read this before working; history is in CHANGELOG.md.
 ## Current state
 
 - Source version: **0.2.2**, Mac compatibility/package verification update.
+- **Pushed and CI-built:** `b7.1-b6903ff` from commit `b6903ff`, Mac run
+  https://github.com/jwiley21/FirstPlugin/actions/runs/42260131512 succeeded.
+- Download (retained until 2026-12-06):
+  https://github.com/jwiley21/FirstPlugin/actions/runs/42260131512/artifacts/13524528678
+  ZIP: `OrbitalPan-v0.2.2-b7.1-b6903ff-macOS-Universal.zip`.
+  Bundle: `OrbitalPan-v0.2.2-b7.1-b6903ff.vst3`.
 - Repository: https://github.com/jwiley21/FirstPlugin, branch `main`.
 - Confirmed prior Mac artifact: **0.2.1-b4.1-881a368**, successful run:
   https://github.com/jwiley21/FirstPlugin/actions/runs/42189669734.
@@ -30,16 +36,22 @@ Implemented for 0.2.2:
 - Version/build stays on ZIP/folder/.vst3/header; IDs/parameters/DSP unchanged.
   ZIP remains the delivery format as the user requested.
 
-Checks so far:
+Checks completed:
 
 - Local YAML parsed, all five Bash steps passed bash -n, Python syntax passed.
 - git diff --check passed.
 - Windows build attempt blocked: VS 2026 is present but development environment
   discovery fails and compiler headers are missing. No new Windows test success.
-- Mac run 42258029190 (`a5c4096`, build 6) compiled the universal VST3 and
-  passed both native CTests (DSP and VST3 host smoke test). The Intel command
-  then failed because the assumed product-name executable path did not exist;
-  no artifact was uploaded. Follow-up uses CMake-generated target paths.
+- Successful run 42260131512 on macOS 15.8.2: both native CTests passed;
+  x86_64/Rosetta audio suite passed; both modes loaded the renamed, extracted
+  VST3 and passed scan/version/instantiate/audio/state/editor smoke tests.
+- Extracted bundle passed strict signature, executable permissions, identity,
+  universal architecture, minimum OS and system-only dependency checks.
+- Downloaded the uploaded ZIP independently: SHA-256 matches GitHub's digest,
+  ZIP integrity passed, x86_64 minimum is 10.13 and arm64 minimum is 11.0,
+  version/build/filename agree, and VST3 class IDs match 0.2.1.
+- Earlier run 6 stopped on an incorrect test executable path; resolved with
+  CMake-generated target paths in run 7. No artifact was uploaded by run 6.
 - Inspected downloaded 0.2.1 ZIP: intact universal Mach-O, executable mode 755,
   stable bundle ID/version; both slices have a macOS 11 minimum.
 - Local validator fixtures accepted both Mach-O minimum-version command formats
@@ -47,7 +59,6 @@ Checks so far:
 
 ## Remaining work and constraints
 
-- Build/download 0.2.2 in GitHub; record actual result and build ID here.
 - Confirm installation/playback on the client's actual macOS/Live version.
 - Targeting 10.13 does not prove every old Intel Mac works. Rosetta tests do not
   replace native Intel hardware or older-macOS testing.

@@ -22,6 +22,8 @@ changes; it does not by itself mean a binary has been published or tested in a D
 - Kept the version/build in the ZIP, folder, actual .vst3, and plugin header.
   Internal identity, parameters and DSP are unchanged. Still an ad-hoc signed,
   non-notarized tester build; older macOS and Ableton need tester confirmation.
+- Verified Mac tester artifact: `b7.1-b6903ff` (GitHub run 7); recorded its
+  download and checks in README/PROGRESS with a documentation-only follow-up.
 
 ## 0.2.1 — version identification and tester handoff
 
