@@ -1,24 +1,53 @@
-OrbitalPan - Mac tester build
+OrbitalPan v@PROJECT_VERSION@ - Mac tester build @ORBITALPAN_EFFECTIVE_BUILD_ID@
 ============================
 
 This download contains a compiled VST3 plugin for Intel and Apple silicon
 Macs running macOS 11 or later. No Xcode, Homebrew, or compilation is needed.
 The DAW must also support your macOS version. This is a test build.
 
+IDENTIFY YOUR VERSION
+
+The ZIP/folder name includes the version and a unique build ID. BUILD-INFO.txt
+lists the full details. After installation, the plugin's top row must match
+that version and build. Send that information with every bug report.
+
+The actual plugin bundle also includes the version/build in its filename:
+
+@ORBITALPAN_PACKAGE_PREFIX@.vst3
+
+All versions still identify as OrbitalPan inside Ableton so existing projects
+can use the update. Move earlier OrbitalPan bundles OUT of the scanned VST3
+folders before installing this one. Different filenames do not make them
+independent plugins. Keep previous ZIPs/backups somewhere else.
+
 INSTALL IN ABLETON LIVE
 
 1. Quit Ableton Live.
-2. Unzip the download. Keep OrbitalPan.vst3 as a complete bundle;
+2. Unzip the download. Keep the versioned .vst3 as a complete bundle;
    do not copy files out of its Contents folder.
 3. In Finder, press Command+Shift+G, paste this path, and press Return:
 
    ~/Library/Audio/Plug-Ins/
 
 4. Open the VST3 folder, or create a folder named VST3 if it is missing.
-5. If an older OrbitalPan.vst3 is installed, move it somewhere outside the
-   plugin folders as a backup. Copy the new OrbitalPan.vst3 into VST3.
+5. Move ALL older OrbitalPan*.vst3 bundles outside the plugin folders as backups.
+   Check both locations (the second is system-wide):
+
+   ~/Library/Audio/Plug-Ins/VST3/
+   /Library/Audio/Plug-Ins/VST3/
+
+   Copy this new bundle into the first location:
+
+   @ORBITALPAN_PACKAGE_PREFIX@.vst3
 6. Open Live > Settings > Plug-Ins. Enable Use VST3 Plug-In System Folders.
    Rescan and search for OrbitalPan in Live's browser.
+7. Open the plugin and compare its top-row version/build with BUILD-INFO.txt.
+   If they differ, check for an older duplicate in this system-wide folder:
+
+   /Library/Audio/Plug-Ins/VST3/
+
+   Keep only the new copy in the scanned folders. Quit/reopen Live and hold
+   Option while rescanning. A plugin without a version header is an older build.
 
 If your Library does not contain Audio/Plug-Ins yet, open Terminal and run:
 
@@ -34,7 +63,7 @@ If it is blocked, only for the copy you received directly from the developer:
 1. Quit Live.
 2. Open Terminal and run this command for this plugin only:
 
-xattr -dr com.apple.quarantine "$HOME/Library/Audio/Plug-Ins/VST3/OrbitalPan.vst3"
+xattr -dr com.apple.quarantine "$HOME/Library/Audio/Plug-Ins/VST3/@ORBITALPAN_PACKAGE_PREFIX@.vst3"
 
 3. Reopen Live and hold Option while clicking Rescan.
 
@@ -57,7 +86,7 @@ fixed. Reverb timing was also corrected. Leave headroom when widening.
 Keep your original project and old plugin available while comparing versions.
 
 Send feedback with your Mac chip, macOS version, Live version, sample rate,
-buffer size, what you were doing, and SOURCE-COMMIT.txt from this download.
+buffer size, what you were doing, and BUILD-INFO.txt from this download.
 
 The automated suite runs on the build Mac's native CPU. Both CPU architectures
 are included, but this does not replace testing in Live on your own machine.

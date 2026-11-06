@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "OrbitalPanBuildInfo.h"
 
 namespace
 {
@@ -237,6 +238,25 @@ OrbitalPanAudioProcessorEditor::OrbitalPanAudioProcessorEditor(OrbitalPanAudioPr
 {
     addAndMakeVisible(xyPad);
 
+    versionLabel.setText(juce::String("OrbitalPan v") + OrbitalPanBuildInfo::version, juce::dontSendNotification);
+    versionLabel.setName("Plugin version");
+    versionLabel.setFont(juce::FontOptions(15.0f));
+    versionLabel.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(versionLabel);
+
+    buildLabel.setText(juce::String("Build ") + OrbitalPanBuildInfo::buildId, juce::dontSendNotification);
+    buildLabel.setName("Plugin build");
+    buildLabel.setFont(juce::FontOptions(12.0f));
+    buildLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    buildLabel.setJustificationType(juce::Justification::centredRight);
+    addAndMakeVisible(buildLabel);
+    const auto buildDetails = juce::String("Version: ") + OrbitalPanBuildInfo::version
+        + "\nBuild: " + OrbitalPanBuildInfo::buildId
+        + "\nSource: " + OrbitalPanBuildInfo::sourceCommit
+        + "\nUncommitted changes: " + OrbitalPanBuildInfo::sourceModified;
+    versionLabel.setTooltip(buildDetails);
+    buildLabel.setTooltip(buildDetails);
+
     depthSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     depthSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
     addAndMakeVisible(depthSlider);
@@ -319,7 +339,7 @@ OrbitalPanAudioProcessorEditor::OrbitalPanAudioProcessorEditor(OrbitalPanAudioPr
 
     startTimerHz(30);
 
-    setSize(460, 560);
+    setSize(460, 590);
 }
 
 OrbitalPanAudioProcessorEditor::~OrbitalPanAudioProcessorEditor()
@@ -336,6 +356,9 @@ void OrbitalPanAudioProcessorEditor::paint(juce::Graphics& g)
 void OrbitalPanAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds().reduced(12);
+    auto header = bounds.removeFromTop(30);
+    versionLabel.setBounds(header.removeFromLeft(180));
+    buildLabel.setBounds(header);
 
     auto controlsArea = bounds.removeFromBottom(136);
     bounds.removeFromBottom(22); // Space for the knob labels.

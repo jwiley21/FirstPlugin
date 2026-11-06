@@ -1,0 +1,11 @@
+OrbitalPan v@PROJECT_VERSION@
+Build: @ORBITALPAN_EFFECTIVE_BUILD_ID@
+Plugin file: @ORBITALPAN_PACKAGE_PREFIX@.vst3
+Source commit: @ORBITALPAN_SOURCE_COMMIT@
+Uncommitted source changes: @ORBITALPAN_SOURCE_MODIFIED@
+Platform: @CMAKE_SYSTEM_NAME@
+
+The plugin's top row must show the same version and build listed here.
+If it differs, your DAW loaded another installed copy. Quit the DAW, replace
+that copy, check both user/system VST3 folders, and rescan.
+Include this file with feedback so the developer can identify the exact build.

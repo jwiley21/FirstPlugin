@@ -33,7 +33,8 @@ jobs:
             '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64' \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
             -DORBITALPAN_BUILD_TESTS=ON \
-            -DORBITALPAN_COPY_PLUGIN_AFTER_BUILD=OFF
+            -DORBITALPAN_COPY_PLUGIN_AFTER_BUILD=OFF \
+            "-DORBITALPAN_BUILD_ID=b${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:7}"
 
       - name: Build plugin and regression tests
         run: cmake --build build/mac-tester --config Release --parallel 2
@@ -42,6 +43,7 @@ jobs:
         run: ctest --test-dir build/mac-tester -C Release --output-on-failure
 
       - name: Verify architectures and package tester ZIP
+        id: package
         run: |
           bundle='build/mac-tester/OrbitalPan_artefacts/Release/VST3/OrbitalPan.vst3'
           binary="$bundle/Contents/MacOS/OrbitalPan"
@@ -52,23 +54,39 @@ jobs:
           codesign --force --sign - --timestamp=none "$bundle"
           codesign --verify --strict --verbose=2 "$bundle"
 
-          package='build/mac-tester/package/OrbitalPan-macOS-Universal'
+          package_prefix="$(cat build/mac-tester/generated/package-prefix.txt)"
+          plugin_name="$package_prefix.vst3"
+          package_name="$package_prefix-macOS-Universal"
+          package="build/mac-tester/package/$package_name"
+          archive="build/mac-tester/$package_name.zip"
           mkdir -p "$package"
-          ditto "$bundle" "$package/OrbitalPan.vst3"
-          cp packaging/MAC-TESTER-README.txt "$package/READ-ME-FIRST.txt"
+          ditto "$bundle" "$package/$plugin_name"
+          codesign --verify --strict --verbose=2 "$package/$plugin_name"
+          cp build/mac-tester/generated/READ-ME-FIRST.txt "$package/READ-ME-FIRST.txt"
+          cp build/mac-tester/generated/BUILD-INFO.txt "$package/BUILD-INFO.txt"
+          cp CHANGELOG.md "$package/CHANGELOG.md"
           cp QUALITY_REVIEW.md "$package/QUALITY_REVIEW.md"
           git rev-parse HEAD > "$package/SOURCE-COMMIT.txt"
           # Zip on macOS before uploading so executable permissions and bundle
           # structure survive the download and forwarding to a tester.
           ditto -c -k --sequesterRsrc --keepParent \
-            "$package" build/mac-tester/OrbitalPan-macOS-Universal.zip
-          unzip -t build/mac-tester/OrbitalPan-macOS-Universal.zip
+            "$package" "$archive"
+          unzip -t "$archive"
+          echo "name=$package_name.zip" >> "$GITHUB_OUTPUT"
+          echo "path=$archive" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Mac tester download: $package_name.zip"
+            echo '```text'
+            cat build/mac-tester/generated/BUILD-INFO.txt
+            echo '```'
+            echo 'Send the ZIP below to your tester. Match its version/build to the plugin header after installing.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the file to send to your tester
         uses: actions/upload-artifact@v7
         with:
-          name: OrbitalPan-macOS-Universal.zip
-          path: build/mac-tester/OrbitalPan-macOS-Universal.zip
+          name: ${{ steps.package.outputs.name }}
+          path: ${{ steps.package.outputs.path }}
           archive: false
           if-no-files-found: error
           retention-days: 30

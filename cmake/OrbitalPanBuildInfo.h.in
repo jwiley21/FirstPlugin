@@ -1,0 +1,9 @@
+#pragma once
+
+namespace OrbitalPanBuildInfo
+{
+inline constexpr char version[] = "@PROJECT_VERSION@";
+inline constexpr char buildId[] = "@ORBITALPAN_EFFECTIVE_BUILD_ID@";
+inline constexpr char sourceCommit[] = "@ORBITALPAN_SOURCE_COMMIT@";
+inline constexpr char sourceModified[] = "@ORBITALPAN_SOURCE_MODIFIED@";
+}

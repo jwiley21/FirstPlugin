@@ -66,6 +66,8 @@ private:
     OrbitalPanAudioProcessor& audioProcessor;
 
     XYPad xyPad;
+    juce::Label versionLabel;
+    juce::Label buildLabel;
 
     juce::Slider depthSlider;
     juce::Slider mixSlider;
