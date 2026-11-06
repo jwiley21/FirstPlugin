@@ -1,5 +1,12 @@
 #include "PluginEditor.h"
 
+namespace
+{
+const std::array<juce::Colour, 3> bandColours {
+    juce::Colour(0xff39a9ff), juce::Colour(0xff43df88), juce::Colour(0xffff5b65)
+};
+}
+
 XYPad::XYPad(juce::AudioProcessorValueTreeState& state)
     : apvts(state)
 {
@@ -27,7 +34,7 @@ XYPad::XYPad(juce::AudioProcessorValueTreeState& state)
     posXAttachment->sendInitialUpdate();
     posYAttachment->sendInitialUpdate();
 
-    scopePoints.resize(static_cast<size_t>(ScopeConstants::bufferSize));
+    scopePoints.resize(static_cast<size_t>(ScopeConstants::bufferSize * 3));
 }
 
 XYPad::~XYPad() = default;
@@ -56,8 +63,11 @@ void XYPad::paint(juce::Graphics& g)
 
     drawScope(g, circleBounds, radius);
 
-    const float dotX = centre.x + currentX * radius;
-    const float dotY = centre.y - currentY * radius;
+    auto dot = juce::Point<float>(currentX, currentY);
+    if (dot.getDistanceFromOrigin() > 1.0f)
+        dot /= dot.getDistanceFromOrigin();
+    const float dotX = centre.x + dot.x * radius;
+    const float dotY = centre.y - dot.y * radius;
 
     g.setColour(juce::Colours::orange);
     g.fillEllipse(dotX - 6.0f, dotY - 6.0f, 12.0f, 12.0f);
@@ -98,24 +108,40 @@ void XYPad::setScopeEnabled(bool enabled)
         return;
 
     scopeEnabled = enabled;
-    if (!scopeEnabled)
-        scopePointCount = 0;
+    clearScope();
 }
 
-void XYPad::pushScopeSamples(const float* left, const float* right, int numSamples)
+void XYPad::clearScope()
 {
-    if (!scopeEnabled || scopePoints.empty() || left == nullptr || right == nullptr || numSamples <= 0)
+    scopeWriteIndex = 0;
+    scopePointCount = 0;
+    repaint(getScopeRepaintArea());
+}
+
+void XYPad::pushScopeSamples(const ScopeFrame* frames, int numFrames)
+{
+    if (!scopeEnabled || frames == nullptr || numFrames <= 0)
         return;
 
     const int capacity = static_cast<int>(scopePoints.size());
-
-    for (int i = 0; i < numSamples; ++i)
+    const double now = juce::Time::getMillisecondCounterHiRes() * 0.001;
+    for (int i = 0; i < numFrames; ++i)
     {
-        const float l = juce::jlimit(-1.0f, 1.0f, left[i]);
-        const float r = juce::jlimit(-1.0f, 1.0f, right[i]);
-        scopePoints[static_cast<size_t>(scopeWriteIndex)] = { l, r };
-        scopeWriteIndex = (scopeWriteIndex + 1 == capacity) ? 0 : scopeWriteIndex + 1;
-        scopePointCount = juce::jmin(scopePointCount + 1, capacity);
+        for (size_t band = 0; band < 3; ++band)
+        {
+            const float l = frames[i].left[band];
+            const float r = frames[i].right[band];
+            if (l * l + r * r < 0.000001f)
+                continue;
+
+            // Conventional vectorscope: mono is vertical, stereo differences
+            // spread horizontally. Colour describes frequency, not position.
+            const float x = (r - l) * 0.70710678f;
+            const float y = (l + r) * 0.70710678f;
+            scopePoints[static_cast<size_t>(scopeWriteIndex)] = { { x, y }, now, band };
+            scopeWriteIndex = (scopeWriteIndex + 1) % capacity;
+            scopePointCount = juce::jmin(scopePointCount + 1, capacity);
+        }
     }
 }
 
@@ -187,21 +213,21 @@ void XYPad::drawScope(juce::Graphics& g, const juce::Rectangle<float>& circleBou
     const int startIndex = (scopePointCount < capacity) ? 0 : scopeWriteIndex;
     const int count = scopePointCount;
 
-    const auto baseColour = juce::Colours::deepskyblue;
-    const float minAlpha = 0.04f;
-    const float maxAlpha = 0.22f;
+    const double now = juce::Time::getMillisecondCounterHiRes() * 0.001;
 
     for (int i = 0; i < count; ++i)
     {
         const int index = (startIndex + i >= capacity) ? (startIndex + i - capacity) : (startIndex + i);
         const auto& point = scopePoints[static_cast<size_t>(index)];
 
-        const float t = (count > 1) ? static_cast<float>(i) / static_cast<float>(count - 1) : 1.0f;
-        const float alpha = juce::jmap(t, minAlpha, maxAlpha);
-        g.setColour(baseColour.withAlpha(alpha));
+        const auto age = now - point.timestamp;
+        if (age >= ScopeConstants::persistenceSeconds)
+            continue;
+        const float alpha = 0.28f * static_cast<float>(1.0 - age / ScopeConstants::persistenceSeconds);
+        g.setColour(bandColours[point.band].withAlpha(alpha));
 
-        const float x = centre.x + point.x * scopeRadius;
-        const float y = centre.y - point.y * scopeRadius;
+        const float x = centre.x + point.position.x * scopeRadius;
+        const float y = centre.y - point.position.y * scopeRadius;
         g.fillEllipse(x - 1.2f, y - 1.2f, 2.4f, 2.4f);
     }
 }
@@ -219,6 +245,34 @@ OrbitalPanAudioProcessorEditor::OrbitalPanAudioProcessorEditor(OrbitalPanAudioPr
     mixSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
     addAndMakeVisible(mixSlider);
 
+    widthSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    widthSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 80, 20);
+    widthSlider.setTextValueSuffix(" %");
+    widthSlider.setNumDecimalPlacesToDisplay(1);
+    widthSlider.setDoubleClickReturnValue(true, 0.0);
+    widthSlider.setTooltip("Added stereo width: 0% is unchanged, 200% is maximum. Preserves the mono sum; protects deep bass.");
+    widthSlider.setName("Stereo width");
+    addAndMakeVisible(widthSlider);
+
+    widthLabel.setText("Width", juce::dontSendNotification);
+    widthLabel.setJustificationType(juce::Justification::centred);
+    widthLabel.attachToComponent(&widthSlider, false);
+    addAndMakeVisible(widthLabel);
+
+    const std::array<juce::String, 3> bandNames { "LOW < 250 Hz", "MID 250 Hz - 4 kHz", "HIGH > 4 kHz" };
+    for (size_t i = 0; i < bandLabels.size(); ++i)
+    {
+        bandLabels[i].setText(bandNames[i], juce::dontSendNotification);
+        bandLabels[i].setColour(juce::Label::textColourId, bandColours[i]);
+        bandLabels[i].setJustificationType(juce::Justification::centred);
+        bandLabels[i].setTooltip("Frequency bands overlap smoothly at the crossover frequencies. The cloud shows stereo shape, not physical front/back location.");
+        addAndMakeVisible(bandLabels[i]);
+    }
+
+    depthSlider.setDoubleClickReturnValue(true, 0.5);
+    mixSlider.setDoubleClickReturnValue(true, 1.0);
+    depthSlider.setTooltip("Strength of the front/back tone, level and reverb effect.");
+    mixSlider.setTooltip("Blend between the original signal and all effects, including Width.");
     depthLabel.setText("Depth", juce::dontSendNotification);
     depthLabel.setJustificationType(juce::Justification::centred);
     depthLabel.attachToComponent(&depthSlider, false);
@@ -241,26 +295,38 @@ OrbitalPanAudioProcessorEditor::OrbitalPanAudioProcessorEditor(OrbitalPanAudioPr
 
     scopeToggle.onClick = [this]()
     {
+        audioProcessor.getScopeInputBuffer().discard();
+        audioProcessor.getScopeOutputBuffer().discard();
         xyPad.setScopeEnabled(scopeToggle.getToggleState());
-        xyPad.repaint(xyPad.getScopeRepaintArea());
+        audioProcessor.setScopeCaptureEnabled(scopeToggle.getToggleState());
     };
 
     scopeSourceToggle.onClick = [this]()
     {
         scopeSourceToggle.setButtonText(scopeSourceToggle.getToggleState() ? "IN" : "OUT");
+        audioProcessor.getScopeInputBuffer().discard();
+        audioProcessor.getScopeOutputBuffer().discard();
+        xyPad.clearScope();
     };
 
     depthAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "Depth", depthSlider);
     mixAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "Mix", mixSlider);
 
-    scopeReadBuffer.setSize(2, ScopeConstants::bufferSize, false, false, true);
+    widthAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "Width", widthSlider);
+    audioProcessor.getScopeInputBuffer().discard();
+    audioProcessor.getScopeOutputBuffer().discard();
+    audioProcessor.setScopeCaptureEnabled(true);
 
     startTimerHz(30);
 
-    setSize(420, 500);
+    setSize(460, 560);
 }
 
-OrbitalPanAudioProcessorEditor::~OrbitalPanAudioProcessorEditor() = default;
+OrbitalPanAudioProcessorEditor::~OrbitalPanAudioProcessorEditor()
+{
+    stopTimer();
+    audioProcessor.setScopeCaptureEnabled(false);
+}
 
 void OrbitalPanAudioProcessorEditor::paint(juce::Graphics& g)
 {
@@ -271,7 +337,12 @@ void OrbitalPanAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds().reduced(12);
 
-    auto controlsArea = bounds.removeFromBottom(140);
+    auto controlsArea = bounds.removeFromBottom(136);
+    bounds.removeFromBottom(22); // Space for the knob labels.
+    auto legend = bounds.removeFromBottom(26);
+    const int legendWidth = legend.getWidth() / 3;
+    for (auto& label : bandLabels)
+        label.setBounds(legend.removeFromLeft(legendWidth));
     xyPad.setBounds(bounds);
 
     const auto padBounds = xyPad.getBounds();
@@ -288,31 +359,29 @@ void OrbitalPanAudioProcessorEditor::resized()
     scopeToggle.setBounds(toggleArea);
     scopeSourceToggle.setBounds(toggleArea.translated(0, toggleHeight + 6));
 
-    const int controlWidth = controlsArea.getWidth() / 2;
-    auto left = controlsArea.removeFromLeft(controlWidth);
-    auto right = controlsArea;
-
-    depthSlider.setBounds(left.reduced(10));
-    mixSlider.setBounds(right.reduced(10));
+    const int controlWidth = controlsArea.getWidth() / 3;
+    depthSlider.setBounds(controlsArea.removeFromLeft(controlWidth).reduced(10));
+    widthSlider.setBounds(controlsArea.removeFromLeft(controlWidth).reduced(10));
+    mixSlider.setBounds(controlsArea.reduced(10));
 }
 
 void OrbitalPanAudioProcessorEditor::timerCallback()
 {
-    const bool scopeEnabled = scopeToggle.getToggleState();
-
-    if (!scopeEnabled)
-        return;
-
-    auto& fifo = scopeSourceToggle.getToggleState()
-        ? audioProcessor.getScopeInputBuffer()
-        : audioProcessor.getScopeOutputBuffer();
-
-    const int maxSamples = scopeReadBuffer.getNumSamples();
-    const int pulled = fifo.pull(scopeReadBuffer.getWritePointer(0), scopeReadBuffer.getWritePointer(1), maxSamples);
-
-    if (pulled > 0)
+    auto& input = audioProcessor.getScopeInputBuffer();
+    auto& output = audioProcessor.getScopeOutputBuffer();
+    if (!scopeToggle.getToggleState())
     {
-        xyPad.pushScopeSamples(scopeReadBuffer.getReadPointer(0), scopeReadBuffer.getReadPointer(1), pulled);
-        xyPad.repaint(xyPad.getScopeRepaintArea());
+        input.discard();
+        output.discard();
+        return;
     }
+
+    const bool showInput = scopeSourceToggle.getToggleState();
+    auto& selected = showInput ? input : output;
+    auto& other = showInput ? output : input;
+    other.discard();
+    const int pulled = selected.pull(scopeReadBuffer.data(), static_cast<int>(scopeReadBuffer.size()));
+    xyPad.pushScopeSamples(scopeReadBuffer.data(), pulled);
+    // Continue repainting after transport stops so the trail fades to silence.
+    xyPad.repaint(xyPad.getScopeRepaintArea());
 }

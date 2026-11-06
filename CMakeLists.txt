@@ -1,18 +1,18 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.22)
 
-project(OrbitalPan VERSION 0.1.0 LANGUAGES CXX)
+project(OrbitalPan VERSION 0.2.0 LANGUAGES CXX)
 
 # If you have JUCE installed locally, set JUCE_DIR to that path when configuring CMake.
 # Example: cmake -B build -S . -DJUCE_DIR=/path/to/JUCE
 
 if (DEFINED JUCE_DIR)
-    add_subdirectory(${JUCE_DIR} JUCE)
+    add_subdirectory("${JUCE_DIR}" JUCE)
 else()
     include(FetchContent)
     FetchContent_Declare(
         juce
         GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-        GIT_TAG 7.0.9
+        GIT_TAG 8.0.12
     )
     FetchContent_MakeAvailable(juce)
 endif()
@@ -29,6 +29,8 @@ if (ORBITALPAN_BUILD_STANDALONE)
     list(APPEND PLUGIN_FORMATS Standalone)
 endif()
 
+option(ORBITALPAN_COPY_PLUGIN_AFTER_BUILD "Install the plugin after building" ON)
+
 juce_add_plugin(OrbitalPan
     COMPANY_NAME "Orbital Audio"
     PRODUCT_NAME "OrbitalPan"
@@ -41,7 +43,7 @@ juce_add_plugin(OrbitalPan
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    COPY_PLUGIN_AFTER_BUILD TRUE
+    COPY_PLUGIN_AFTER_BUILD ${ORBITALPAN_COPY_PLUGIN_AFTER_BUILD}
 )
 
 juce_generate_juce_header(OrbitalPan)
@@ -53,7 +55,20 @@ target_sources(OrbitalPan
         Source/PluginEditor.cpp
         Source/PluginEditor.h
         Source/ScopeBuffer.h
+        Source/StereoWidener.h
 )
+
+option(ORBITALPAN_BUILD_TESTS "Build audio regression tests" OFF)
+if (ORBITALPAN_BUILD_TESTS)
+    enable_testing()
+    juce_add_console_app(OrbitalPanTests PRODUCT_NAME "OrbitalPan Tests")
+    target_sources(OrbitalPanTests PRIVATE Tests/AudioTests.cpp)
+    target_compile_features(OrbitalPanTests PRIVATE cxx_std_17)
+    target_link_libraries(OrbitalPanTests PRIVATE OrbitalPan
+        juce::juce_audio_processors juce::juce_dsp juce::juce_gui_extra
+        juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+    add_test(NAME OrbitalPanAudioTests COMMAND OrbitalPanTests)
+endif()
 
 target_compile_features(OrbitalPan PUBLIC cxx_std_17)
 

@@ -1,106 +1,110 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <atomic>
-#include <vector>
+#include <cmath>
+#include <juce_dsp/juce_dsp.h>
 
 namespace ScopeConstants
 {
-constexpr int bufferSize = 4096;
-constexpr int minDownsample = 8;
-constexpr int maxDownsample = 32;
+constexpr int bufferSize = 2048;
 constexpr double targetRateHz = 4000.0;
+constexpr float lowCrossoverHz = 250.0f;
+constexpr float highCrossoverHz = 4000.0f;
+constexpr double persistenceSeconds = 0.35;
 }
+
+struct ScopeFrame
+{
+    std::array<float, 3> left {}, right {};
+};
 
 class ScopeBuffer
 {
 public:
-    void prepare(int capacity, int downsampleFactor)
+    // Only the producer's DSP state is reset here. Fixed FIFO storage and indices
+    // remain valid if the host prepares audio while the editor is reading.
+    void prepare(double sampleRate, int maximumBlockSize)
     {
-        capacity = std::max(1, capacity);
-        bufferL.resize(static_cast<size_t>(capacity));
-        bufferR.resize(static_cast<size_t>(capacity));
-        size = capacity;
-        writeIndex.store(0, std::memory_order_relaxed);
-        readIndex.store(0, std::memory_order_relaxed);
-        setDownsampleFactor(downsampleFactor);
-    }
-
-    void setDownsampleFactor(int factor)
-    {
-        downsampleFactor = std::max(1, factor);
+        juce::dsp::ProcessSpec spec { sampleRate,
+            static_cast<juce::uint32>(std::max(1, maximumBlockSize)), 2 };
+        lowSplit.prepare(spec);
+        highSplit.prepare(spec);
+        lowSplit.setCutoffFrequency(std::min(ScopeConstants::lowCrossoverHz, static_cast<float>(sampleRate * 0.2)));
+        highSplit.setCutoffFrequency(std::min(ScopeConstants::highCrossoverHz, static_cast<float>(sampleRate * 0.45)));
+        downsampleFactor = std::max(1, static_cast<int>(std::round(sampleRate / ScopeConstants::targetRateHz)));
         downsampleCounter = 0;
+        peakFrame = {};
     }
 
     void push(const float* left, const float* right, int numSamples) noexcept
     {
-        if (size == 0 || left == nullptr || right == nullptr || numSamples <= 0)
-            return;
-
         int localWrite = writeIndex.load(std::memory_order_relaxed);
         const int localRead = readIndex.load(std::memory_order_acquire);
-        int counter = downsampleCounter;
 
         for (int i = 0; i < numSamples; ++i)
         {
-            if (counter == 0)
-            {
-                const int nextWrite = (localWrite + 1 == size) ? 0 : localWrite + 1;
-                if (nextWrite != localRead)
+            ScopeFrame frame;
+            split(0, left[i], frame.left);
+            split(1, right[i], frame.right);
+            // Analyse at the full audio rate BEFORE reducing display traffic.
+            // Keep a simultaneous L/R peak pair per band; treble cannot disappear
+            // merely because the display's sampling interval hits its zeroes.
+            for (size_t band = 0; band < 3; ++band)
+                if (frame.left[band] * frame.left[band] + frame.right[band] * frame.right[band]
+                    >= peakFrame.left[band] * peakFrame.left[band] + peakFrame.right[band] * peakFrame.right[band])
                 {
-                    bufferL[static_cast<size_t>(localWrite)] = left[i];
-                    bufferR[static_cast<size_t>(localWrite)] = right[i];
-                    localWrite = nextWrite;
+                    peakFrame.left[band] = frame.left[band];
+                    peakFrame.right[band] = frame.right[band];
                 }
 
-                counter = downsampleFactor - 1;
-            }
-            else
+            if (++downsampleCounter >= downsampleFactor)
             {
-                --counter;
+                const int nextWrite = (localWrite + 1) % ScopeConstants::bufferSize;
+                if (nextWrite != localRead)
+                {
+                    frames[static_cast<size_t>(localWrite)] = peakFrame;
+                    localWrite = nextWrite;
+                }
+                peakFrame = {};
+                downsampleCounter = 0;
             }
         }
-
-        downsampleCounter = counter;
         writeIndex.store(localWrite, std::memory_order_release);
     }
 
-    int pull(float* destLeft, float* destRight, int maxSamples) noexcept
+    int pull(ScopeFrame* destination, int maximumFrames) noexcept
     {
-        if (size == 0 || destLeft == nullptr || destRight == nullptr || maxSamples <= 0)
-            return 0;
-
         int localRead = readIndex.load(std::memory_order_relaxed);
         const int localWrite = writeIndex.load(std::memory_order_acquire);
-
-        const int available = (localWrite >= localRead)
-            ? (localWrite - localRead)
-            : (size - localRead + localWrite);
-
-        const int toRead = std::min(maxSamples, available);
-
-        for (int i = 0; i < toRead; ++i)
+        int count = 0;
+        while (localRead != localWrite && count < maximumFrames)
         {
-            destLeft[i] = bufferL[static_cast<size_t>(localRead)];
-            destRight[i] = bufferR[static_cast<size_t>(localRead)];
-            localRead = (localRead + 1 == size) ? 0 : localRead + 1;
+            destination[count++] = frames[static_cast<size_t>(localRead)];
+            localRead = (localRead + 1) % ScopeConstants::bufferSize;
         }
-
         readIndex.store(localRead, std::memory_order_release);
-        return toRead;
+        return count;
     }
 
-    int getCapacity() const noexcept
+    // Consumer thread only; never move the read index from the audio thread.
+    void discard() noexcept
     {
-        return size;
+        readIndex.store(writeIndex.load(std::memory_order_acquire), std::memory_order_release);
     }
 
 private:
-    std::vector<float> bufferL;
-    std::vector<float> bufferR;
-    std::atomic<int> writeIndex{ 0 };
-    std::atomic<int> readIndex{ 0 };
-    int size = 0;
-    int downsampleFactor = ScopeConstants::minDownsample;
-    int downsampleCounter = 0;
+    void split(int channel, float input, std::array<float, 3>& bands) noexcept
+    {
+        float upper;
+        lowSplit.processSample(channel, input, bands[0], upper);
+        highSplit.processSample(channel, upper, bands[1], bands[2]);
+    }
+
+    std::array<ScopeFrame, ScopeConstants::bufferSize> frames {};
+    std::atomic<int> writeIndex { 0 }, readIndex { 0 };
+    juce::dsp::LinkwitzRileyFilter<float> lowSplit, highSplit;
+    ScopeFrame peakFrame;
+    int downsampleFactor = 1, downsampleCounter = 0;
 };

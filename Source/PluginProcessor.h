@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 #include "ScopeBuffer.h"
+#include "StereoWidener.h"
 
 class OrbitalPanAudioProcessor : public juce::AudioProcessor
 {
@@ -42,20 +43,27 @@ public:
 
     ScopeBuffer& getScopeInputBuffer() noexcept { return scopeInputBuffer; }
     ScopeBuffer& getScopeOutputBuffer() noexcept { return scopeOutputBuffer; }
+    void setScopeCaptureEnabled(bool enabled) noexcept { scopeCaptureEnabled.store(enabled, std::memory_order_relaxed); }
 
 private:
     void updateFiltersAndReverb(float posY, float depth);
-
-    juce::AudioBuffer<float> dryBuffer;
 
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> posXSmoothed;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> posYSmoothed;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> depthSmoothed;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> mixSmoothed;
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> widthSmoothed;
 
     // JUCE IIR filters used for a simple high-shelf tone change (front = brighter, back = darker).
-    juce::dsp::IIR::Filter<float> highShelfL;
-    juce::dsp::IIR::Filter<float> highShelfR;
+    Biquad highShelfL, highShelfR;
+    StereoWidener widener;
+    int controlSamplesRemaining = 0;
+
+    std::atomic<float>* posXParameter = nullptr;
+    std::atomic<float>* posYParameter = nullptr;
+    std::atomic<float>* depthParameter = nullptr;
+    std::atomic<float>* mixParameter = nullptr;
+    std::atomic<float>* widthParameter = nullptr;
 
     // JUCE's lightweight algorithmic reverb for the "behind" effect.
     juce::Reverb reverb;
@@ -65,6 +73,7 @@ private:
 
     ScopeBuffer scopeInputBuffer;
     ScopeBuffer scopeOutputBuffer;
+    std::atomic<bool> scopeCaptureEnabled { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OrbitalPanAudioProcessor)
 };

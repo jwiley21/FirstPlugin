@@ -10,6 +10,7 @@ constexpr float kMaxBrightnessDb = 4.0f; // front/back tone range (high-shelf bo
 constexpr float kMaxLevelDb = 3.0f;      // front/back loudness range
 constexpr float kShelfFrequencyHz = 2500.0f;
 constexpr float kShelfQ = 0.7f;
+constexpr int kControlInterval = 32;
 constexpr float kMaxReverbWet = 0.35f;   // back distance reverb amount
 }
 
@@ -19,6 +20,11 @@ OrbitalPanAudioProcessor::OrbitalPanAudioProcessor()
           .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
 {
+    posXParameter = apvts.getRawParameterValue("PosX");
+    posYParameter = apvts.getRawParameterValue("PosY");
+    depthParameter = apvts.getRawParameterValue("Depth");
+    mixParameter = apvts.getRawParameterValue("Mix");
+    widthParameter = apvts.getRawParameterValue("Width");
 }
 
 OrbitalPanAudioProcessor::~OrbitalPanAudioProcessor() = default;
@@ -45,7 +51,7 @@ bool OrbitalPanAudioProcessor::isMidiEffect() const
 
 double OrbitalPanAudioProcessor::getTailLengthSeconds() const
 {
-    return 1.0;
+    return 4.0;
 }
 
 int OrbitalPanAudioProcessor::getNumPrograms()
@@ -88,30 +94,21 @@ void OrbitalPanAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBl
     depthSmoothed.setCurrentAndTargetValue(*apvts.getRawParameterValue("Depth"));
     mixSmoothed.setCurrentAndTargetValue(*apvts.getRawParameterValue("Mix"));
 
-    dryBuffer.setSize(2, samplesPerBlock, false, false, true);
+    widthSmoothed.reset(sampleRate, kSmoothingTimeSeconds);
+    widthSmoothed.setCurrentAndTargetValue(widthParameter->load());
 
-    const int downsampleFactor = juce::jlimit(
-        ScopeConstants::minDownsample,
-        ScopeConstants::maxDownsample,
-        static_cast<int>(std::round(sampleRate / ScopeConstants::targetRateHz)));
-
-    scopeInputBuffer.prepare(ScopeConstants::bufferSize, downsampleFactor);
-    scopeOutputBuffer.prepare(ScopeConstants::bufferSize, downsampleFactor);
-
-    juce::dsp::ProcessSpec spec;
-    spec.sampleRate = sampleRate;
-    spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
-    spec.numChannels = 1;
-
-    highShelfL.prepare(spec);
-    highShelfR.prepare(spec);
-
+    scopeInputBuffer.prepare(sampleRate, samplesPerBlock);
+    scopeOutputBuffer.prepare(sampleRate, samplesPerBlock);
     highShelfL.reset();
     highShelfR.reset();
+    widener.prepare(sampleRate);
+    controlSamplesRemaining = 0;
 
-    reverb.reset();
-
+    // JUCE Reverb scales its dry setting by two. Configure before preparing so
+    // its gain smoothers start at the requested values instead of fading in.
     updateFiltersAndReverb(posYSmoothed.getCurrentValue(), depthSmoothed.getCurrentValue());
+    reverb.setSampleRate(sampleRate);
+    reverb.reset();
 }
 
 void OrbitalPanAudioProcessor::releaseResources()
@@ -141,62 +138,70 @@ void OrbitalPanAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     if (buffer.getNumChannels() < 2)
         return;
 
-    if (dryBuffer.getNumSamples() != buffer.getNumSamples())
-        dryBuffer.setSize(2, buffer.getNumSamples(), false, false, true);
+    const int numSamples = buffer.getNumSamples();
+    const bool captureScope = scopeCaptureEnabled.load(std::memory_order_relaxed);
+    if (captureScope)
+        scopeInputBuffer.push(buffer.getReadPointer(0), buffer.getReadPointer(1), numSamples);
 
-    dryBuffer.makeCopyOf(buffer, true);
+    posXSmoothed.setTargetValue(posXParameter->load());
+    posYSmoothed.setTargetValue(posYParameter->load());
+    depthSmoothed.setTargetValue(depthParameter->load());
+    mixSmoothed.setTargetValue(mixParameter->load());
+    widthSmoothed.setTargetValue(widthParameter->load());
 
-    scopeInputBuffer.push(dryBuffer.getReadPointer(0), dryBuffer.getReadPointer(1), buffer.getNumSamples());
+    auto* left = buffer.getWritePointer(0);
+    auto* right = buffer.getWritePointer(1);
+    std::array<float, kControlInterval> dryL {}, dryR {};
 
-    posXSmoothed.setTargetValue(*apvts.getRawParameterValue("PosX"));
-    posYSmoothed.setTargetValue(*apvts.getRawParameterValue("PosY"));
-    depthSmoothed.setTargetValue(*apvts.getRawParameterValue("Depth"));
-    mixSmoothed.setTargetValue(*apvts.getRawParameterValue("Mix"));
-
-    // Update the tone and reverb for this block using the current smoothed values.
-    updateFiltersAndReverb(posYSmoothed.getCurrentValue(), depthSmoothed.getCurrentValue());
-
-    // Apply the front/back brightness shaping.
-    juce::dsp::AudioBlock<float> block(buffer);
-    auto leftBlock = block.getSingleChannelBlock(0);
-    auto rightBlock = block.getSingleChannelBlock(1);
-
-    highShelfL.process(juce::dsp::ProcessContextReplacing<float>(leftBlock));
-    highShelfR.process(juce::dsp::ProcessContextReplacing<float>(rightBlock));
-
-    // Add a simple reverb for the "behind" position.
-    reverb.processStereo(buffer.getWritePointer(0), buffer.getWritePointer(1), buffer.getNumSamples());
-
-    auto* wetL = buffer.getWritePointer(0);
-    auto* wetR = buffer.getWritePointer(1);
-    const auto* dryL = dryBuffer.getReadPointer(0);
-    const auto* dryR = dryBuffer.getReadPointer(1);
-
-    for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+    // Fixed-size chunks handle arbitrary host block sizes without allocating.
+    // Tone updates follow the smoothed controls every 32 samples, independent
+    // of the host's block size, instead of jumping once per audio block.
+    for (int offset = 0; offset < numSamples;)
     {
-        const float posX = posXSmoothed.getNextValue();
-        const float posY = posYSmoothed.getNextValue();
-        const float depth = depthSmoothed.getNextValue();
-        const float mix = mixSmoothed.getNextValue();
+        if (controlSamplesRemaining == 0)
+        {
+            updateFiltersAndReverb(posYSmoothed.getCurrentValue(), depthSmoothed.getCurrentValue());
+            controlSamplesRemaining = kControlInterval;
+        }
+        const int count = juce::jmin(controlSamplesRemaining, numSamples - offset);
+        for (int i = 0; i < count; ++i)
+        {
+            dryL[static_cast<size_t>(i)] = left[offset + i];
+            dryR[static_cast<size_t>(i)] = right[offset + i];
+            left[offset + i] = highShelfL.process(left[offset + i]);
+            right[offset + i] = highShelfR.process(right[offset + i]);
+        }
+        reverb.processStereo(left + offset, right + offset, count);
 
-        // Equal-power pan: -1 = left, +1 = right.
-        const float theta = (posX + 1.0f) * (juce::MathConstants<float>::pi / 4.0f);
-        const float leftGain = std::cos(theta);
-        const float rightGain = std::sin(theta);
+        for (int i = 0; i < count; ++i)
+        {
+            const float posX = posXSmoothed.getNextValue();
+            const float posY = posYSmoothed.getNextValue();
+            const float depth = depthSmoothed.getNextValue();
+            const float mix = mixSmoothed.getNextValue();
+            const float width = widthSmoothed.getNextValue() * 0.01f;
 
-        // Front/back level: front slightly louder, back slightly quieter.
-        const float levelDb = posY * depth * kMaxLevelDb;
-        const float level = juce::Decibels::decibelsToGain(levelDb);
+            // Equal-power stereo balance, normalised to unity at centre.
+            const float theta = (posX + 1.0f) * (juce::MathConstants<float>::pi / 4.0f);
+            const float leftGain = std::cos(theta) * juce::MathConstants<float>::sqrt2;
+            const float rightGain = std::sin(theta) * juce::MathConstants<float>::sqrt2;
+            const float level = juce::Decibels::decibelsToGain(posY * depth * kMaxLevelDb);
+            float processedL = left[offset + i] * leftGain * level;
+            float processedR = right[offset + i] * rightGain * level;
 
-        const float processedL = wetL[sample] * leftGain * level;
-        const float processedR = wetR[sample] * rightGain * level;
-
-        // Standard wet/dry crossfade. Mix = 0 -> dry only, Mix = 1 -> fully processed.
-        wetL[sample] = dryL[sample] + (processedL - dryL[sample]) * mix;
-        wetR[sample] = dryR[sample] + (processedR - dryR[sample]) * mix;
+            // Widen after balance so the width control preserves this stage's
+            // mono sum even away from the centre of the XY pad.
+            widener.process(processedL, processedR, width);
+            const auto index = static_cast<size_t>(i);
+            left[offset + i] = mix == 0.0f ? dryL[index] : dryL[index] + (processedL - dryL[index]) * mix;
+            right[offset + i] = mix == 0.0f ? dryR[index] : dryR[index] + (processedR - dryR[index]) * mix;
+        }
+        offset += count;
+        controlSamplesRemaining -= count;
     }
 
-    scopeOutputBuffer.push(wetL, wetR, buffer.getNumSamples());
+    if (captureScope)
+        scopeOutputBuffer.push(left, right, numSamples);
 }
 
 bool OrbitalPanAudioProcessor::hasEditor() const
@@ -223,7 +228,19 @@ void OrbitalPanAudioProcessor::setStateInformation(const void* data, int sizeInB
     if (xmlState != nullptr)
     {
         if (xmlState->hasTagName(apvts.state.getType()))
-            apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
+        {
+            auto state = juce::ValueTree::fromXml(*xmlState);
+            // Old sessions predate Width. Reset it explicitly even if another
+            // preset previously left this instance at a nonzero setting.
+            if (!state.getChildWithProperty("id", "Width").isValid())
+            {
+                juce::ValueTree widthState("PARAM");
+                widthState.setProperty("id", "Width", nullptr);
+                widthState.setProperty("value", 0.0f, nullptr);
+                state.appendChild(widthState, nullptr);
+            }
+            apvts.replaceState(state);
+        }
     }
 }
 
@@ -243,6 +260,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrbitalPanAudioProcessor::cr
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "Mix", "Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 1.0f));
 
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "Width", "Width", juce::NormalisableRange<float>(0.0f, 200.0f, 0.1f), 0.0f,
+        juce::AudioParameterFloatAttributes().withLabel("%")));
+
     return { params.begin(), params.end() };
 }
 
@@ -252,11 +273,12 @@ void OrbitalPanAudioProcessor::updateFiltersAndReverb(float posY, float depth)
     const float shelfDb = posY * depth * kMaxBrightnessDb;
     const float shelfGain = juce::Decibels::decibelsToGain(shelfDb);
 
-    auto coeffs = juce::dsp::IIR::Coefficients<float>::makeHighShelf(
-        currentSampleRate, kShelfFrequencyHz, kShelfQ, shelfGain);
+    const auto coeffs = juce::dsp::IIR::ArrayCoefficients<float>::makeHighShelf(
+        currentSampleRate, juce::jmin(kShelfFrequencyHz, static_cast<float>(currentSampleRate * 0.45)),
+        kShelfQ, shelfGain);
 
-    *highShelfL.coefficients = *coeffs;
-    *highShelfR.coefficients = *coeffs;
+    highShelfL.setCoefficients(coeffs);
+    highShelfR.setCoefficients(coeffs);
 
     // Reverb mapping: more reverb the further "back" the sound is.
     const float backAmount = juce::jlimit(0.0f, 1.0f, (-posY) * depth);
@@ -264,7 +286,7 @@ void OrbitalPanAudioProcessor::updateFiltersAndReverb(float posY, float depth)
     reverbParams.roomSize = 0.2f + backAmount * 0.5f;
     reverbParams.damping = 0.5f;
     reverbParams.wetLevel = backAmount * kMaxReverbWet;
-    reverbParams.dryLevel = 1.0f;
+    reverbParams.dryLevel = 0.5f; // JUCE internal dry scale = 2, giving unity gain.
     reverbParams.width = 1.0f;
     reverbParams.freezeMode = 0.0f;
 

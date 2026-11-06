@@ -1,0 +1,73 @@
+name: Build Mac tester download
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-tester-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  universal-vst3:
+    name: Universal macOS VST3
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Configure Intel and Apple silicon build
+        run: |
+          cmake -S . -B build/mac-tester \
+            -DCMAKE_BUILD_TYPE=Release \
+            '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64' \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DORBITALPAN_BUILD_TESTS=ON \
+            -DORBITALPAN_COPY_PLUGIN_AFTER_BUILD=OFF
+
+      - name: Build plugin and regression tests
+        run: cmake --build build/mac-tester --config Release --parallel 2
+
+      - name: Run audio regression tests on the Mac runner
+        run: ctest --test-dir build/mac-tester -C Release --output-on-failure
+
+      - name: Verify architectures and package tester ZIP
+        run: |
+          bundle='build/mac-tester/OrbitalPan_artefacts/Release/VST3/OrbitalPan.vst3'
+          binary="$bundle/Contents/MacOS/OrbitalPan"
+          lipo -verify_arch arm64 x86_64 "$binary"
+          # Ad-hoc signing permits local code loading on Apple silicon.
+          # This is a tester build, not Developer ID signing or notarization.
+          codesign --force --sign - --timestamp=none "$bundle"
+          codesign --verify --strict --verbose=2 "$bundle"
+
+          package='build/mac-tester/package/OrbitalPan-macOS-Universal'
+          mkdir -p "$package"
+          ditto "$bundle" "$package/OrbitalPan.vst3"
+          cp packaging/MAC-TESTER-README.txt "$package/READ-ME-FIRST.txt"
+          cp QUALITY_REVIEW.md "$package/QUALITY_REVIEW.md"
+          git rev-parse HEAD > "$package/SOURCE-COMMIT.txt"
+          # Zip on macOS before uploading so executable permissions and bundle
+          # structure survive the download and forwarding to a tester.
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$package" build/mac-tester/OrbitalPan-macOS-Universal.zip
+          unzip -t build/mac-tester/OrbitalPan-macOS-Universal.zip
+
+      - name: Upload the file to send to your tester
+        uses: actions/upload-artifact@v7
+        with:
+          name: OrbitalPan-macOS-Universal.zip
+          path: build/mac-tester/OrbitalPan-macOS-Universal.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 30

@@ -18,7 +18,8 @@ public:
     void mouseUp(const juce::MouseEvent& event) override;
 
     void setScopeEnabled(bool enabled);
-    void pushScopeSamples(const float* left, const float* right, int numSamples);
+    void clearScope();
+    void pushScopeSamples(const ScopeFrame* frames, int numFrames);
     juce::Rectangle<int> getScopeRepaintArea() const;
 
 private:
@@ -37,7 +38,13 @@ private:
     float currentY = 0.0f; // -1 to +1
 
     bool scopeEnabled = true;
-    std::vector<juce::Point<float>> scopePoints;
+    struct ScopePoint
+    {
+        juce::Point<float> position;
+        double timestamp = 0;
+        size_t band = 0;
+    };
+    std::vector<ScopePoint> scopePoints;
     int scopeWriteIndex = 0;
     int scopePointCount = 0;
 
@@ -62,18 +69,23 @@ private:
 
     juce::Slider depthSlider;
     juce::Slider mixSlider;
+    juce::Slider widthSlider;
 
     juce::Label depthLabel;
     juce::Label mixLabel;
+    juce::Label widthLabel;
+    std::array<juce::Label, 3> bandLabels;
 
     juce::TextButton scopeToggle;
     juce::TextButton scopeSourceToggle;
 
-    juce::AudioBuffer<float> scopeReadBuffer;
+    std::array<ScopeFrame, ScopeConstants::bufferSize> scopeReadBuffer;
+    juce::TooltipWindow tooltips { this, 600 };
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<SliderAttachment> depthAttachment;
     std::unique_ptr<SliderAttachment> mixAttachment;
+    std::unique_ptr<SliderAttachment> widthAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OrbitalPanAudioProcessorEditor)
 };

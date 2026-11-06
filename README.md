@@ -6,20 +6,36 @@ OrbitalPan is a stereo VST3 audio effect for Ableton Live and other VST3 hosts. 
 - Moving toward the front makes the signal slightly brighter and louder.
 - Moving toward the back makes the signal darker, quieter, and more reverberant.
 - **Depth** controls the strength of the front/back effect.
-- **Mix** blends the original and processed signals.
-- **Scope** shows the stereo image; switch between the processed **OUT** signal and original **IN** signal.
+- **Width** adds 0–200% stereo widening, including on mono material routed to the stereo input. Zero leaves the existing width unchanged. Double-click the dial to reset it.
+- **Mix** blends the original and processed signals, including Width.
+- **Scope** shows the stereo image; switch between the processed **OUT** signal and original **IN** signal. Low frequencies are blue (below 250 Hz), mids are green (250 Hz–4 kHz), and highs are red (above 4 kHz), with smooth crossover overlap. Mono appears vertically; stereo differences spread horizontally. The cloud is a stereo vectorscope, not a physical front/back or frequency-axis map.
+
+Width uses an original phase-decorrelated mid/side algorithm inspired by the functionality of stereo wideners such as [Polyverse Wider](https://polyversemusic.com/products/wider/); it does not reproduce their proprietary algorithm. The added side signal cancels when summed to mono, preserving the mono sum **relative to Width at zero**, including with the other controls active. A fixed 120 Hz high-pass reduces added bass width. This is not a brick-wall bass crossover or a mono bass switch. Widening can increase stereo peaks; leave headroom in the track.
+
+Version 0.2 corrects the old neutral-position gain boost and reverb sample-rate setup. Existing sessions retain their parameter values and load with Width at zero, but their output level/reverb can change because of those fixes. See [QUALITY_REVIEW.md](QUALITY_REVIEW.md) for the audit, validation, and remaining release checks.
 
 Current project details:
 
-- Version: 0.1.0
+- Version: 0.2.0
 - Format: 64-bit VST3 effect (stereo input and output)
 - Language: C++17
-- Framework: JUCE 8.0.12 for the tested Windows build; CMake also has a JUCE 7.0.9 fallback
-- Windows: tested with Visual Studio 2022 and Ableton Live
+- Framework: JUCE 8.0.12 (local checkout or pinned CMake download)
+- Windows: 0.2 builds with Visual Studio 2022 and passes the audio regression suite; the previous version was tested in Ableton Live, and 0.2 still needs DAW listening/automation checks
 - macOS: the instructions below target both Apple silicon and Intel Macs, but the target Mac still needs to be tested
 
-> [!IMPORTANT]
-> This repository contains source code, not a ready-to-run installer. A user following this guide will install build tools and compile the plug-in. For the simplest client handoff in the future, publish a signed and notarized universal macOS build containing both `arm64` and `x86_64` architectures.
+## Send a compiled Mac build to a tester
+
+The [Mac tester workflow](.github/workflows/macos-tester.yml) builds a universal VST3 containing both Apple silicon (`arm64`) and Intel (`x86_64`) code. Your tester does **not** need to compile it or install development tools. The workflow is prepared; its first successful GitHub run is still required before a Mac download exists.
+
+1. Push the source changes and `.github/workflows/macos-tester.yml` to `main` on GitHub.
+2. Open the repository's **Actions** tab and select **Build Mac tester download**. It starts automatically after the push; **Run workflow** can also start a new build.
+3. Wait for a green run. The workflow builds the plugin, runs the audio regression suite on an Apple silicon Mac runner, checks that both CPU architectures are present, and packages the bundle.
+4. Download **OrbitalPan-macOS-Universal.zip** from the run's **Artifacts** section. Downloads are retained for 30 days. You can send the ZIP directly to your friend, so he does not need GitHub access.
+5. He extracts it and follows `READ-ME-FIRST.txt`: copy `OrbitalPan.vst3` into `~/Library/Audio/Plug-Ins/VST3/`, then enable VST3 system folders and rescan in Live. The package targets macOS 11 or later; the DAW's own requirements also apply.
+
+This workflow produces an **ad-hoc signed tester build**, not a Developer ID signed/notarized public release. macOS may block a downloaded tester build; the included [tester instructions](packaging/MAC-TESTER-README.txt) explain a narrowly scoped workaround for this plugin. A smoother public download requires Developer ID signing and Apple notarization. The Windows ZIP cannot be used on a Mac.
+
+GitHub supplies [Mac runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), and JUCE supports [universal CMake builds](https://github.com/juce-framework/JUCE/blob/8.0.12/docs/CMake%20API.md). Apple's [Developer ID documentation](https://developer.apple.com/developer-id/) explains signing downloaded plug-ins. The compilation instructions below remain available for anyone who prefers building locally.
 
 ## macOS: build and install for Ableton Live
 
@@ -158,7 +174,7 @@ If a command fails, copy the complete error text or take a screenshot before try
 
 ## Windows: build and install
 
-The Windows build has been tested with Visual Studio 2022 and Ableton Live.
+The 0.2 Windows build and automated audio tests pass with Visual Studio 2022. The previous version was tested in Ableton Live; the new DSP and controls still need a DAW listening/automation check.
 
 ### Requirements
 
@@ -203,4 +219,14 @@ build/OrbitalPan_artefacts/Release/VST3/OrbitalPan.vst3
 
 To build the optional standalone application, configure with `-DORBITALPAN_BUILD_STANDALONE=ON`. The default build produces only VST3.
 
-If `JUCE_DIR` is omitted, CMake downloads the repository's older JUCE 7.0.9 fallback through `FetchContent`. That fallback has not been used for the documented Windows test and is not the recommended client build path.
+If `JUCE_DIR` is omitted, CMake downloads JUCE 8.0.12 through `FetchContent`.
+
+### Regression checks without installing over an existing plug-in
+
+```bash
+cmake -S . -B build/quality -DJUCE_DIR=/absolute/path/to/JUCE -DORBITALPAN_BUILD_TESTS=ON -DORBITALPAN_COPY_PLUGIN_AFTER_BUILD=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build build/quality --config Release --parallel
+ctest --test-dir build/quality -C Release --output-on-failure
+```
+
+On Windows, use `-G "Visual Studio 17 2022" -A x64` when configuring a new build directory. The test executable optionally accepts an absolute PNG filename to render a preview of the editor with synthetic three-band audio. Build artifacts from this configuration stay under `build/quality/OrbitalPan_artefacts/Release/VST3/` until manually installed.
