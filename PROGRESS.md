@@ -36,7 +36,8 @@ Checks so far:
 - git diff --check passed.
 - Windows build attempt blocked: VS 2026 is present but development environment
   discovery fails and compiler headers are missing. No new Windows test success.
-- Mac checks await GitHub. Do not infer success from configured tests.
+- Pushed initial implementation as `0ebc3e9`; CI-only follow-up corrects shell
+  executable paths to JUCE product names (with spaces). Mac checks await GitHub.
 
 ## Remaining work and constraints
 

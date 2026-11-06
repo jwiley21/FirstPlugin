@@ -13,6 +13,7 @@ changes; it does not by itself mean a binary has been published or tested in a D
   stereo audio processing, state restore, and editor creation.
 - Mac CI now runs audio regressions natively and as x86_64 under Rosetta,
   then loads both slices of the versioned bundle extracted from the final ZIP.
+  Shell invocations use JUCE's actual executable product names (with spaces).
 - Packaging checks the extracted signature, executable permissions, stable
   bundle ID, version, both Mach-O minimum OS versions, and system dependencies.
 - Clarified greyed-out files, wrong downloads, Live's VST3 requirement (10.1+),
