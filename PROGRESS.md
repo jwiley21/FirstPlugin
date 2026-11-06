@@ -36,8 +36,14 @@ Checks so far:
 - git diff --check passed.
 - Windows build attempt blocked: VS 2026 is present but development environment
   discovery fails and compiler headers are missing. No new Windows test success.
-- Pushed initial implementation as `0ebc3e9`; CI-only follow-up corrects shell
-  executable paths to JUCE product names (with spaces). Mac checks await GitHub.
+- Mac run 42258029190 (`a5c4096`, build 6) compiled the universal VST3 and
+  passed both native CTests (DSP and VST3 host smoke test). The Intel command
+  then failed because the assumed product-name executable path did not exist;
+  no artifact was uploaded. Follow-up uses CMake-generated target paths.
+- Inspected downloaded 0.2.1 ZIP: intact universal Mach-O, executable mode 755,
+  stable bundle ID/version; both slices have a macOS 11 minimum.
+- Local validator fixtures accepted both Mach-O minimum-version command formats
+  and rejected a raised Intel minimum and a build-machine-only dependency.
 
 ## Remaining work and constraints
 

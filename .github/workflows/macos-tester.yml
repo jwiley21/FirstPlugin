@@ -43,7 +43,7 @@ jobs:
         run: ctest --test-dir build/mac-tester -C Release --output-on-failure
 
       - name: Run Intel audio regression tests under Rosetta
-        run: arch -x86_64 "build/mac-tester/OrbitalPanTests_artefacts/Release/OrbitalPan Tests"
+        run: arch -x86_64 "$(cat build/mac-tester/generated/audio-test-path-Release.txt)"
 
       - name: Verify architectures and package tester ZIP
         id: package
@@ -83,7 +83,7 @@ jobs:
           installed="$PWD/$extracted/$package_name/$plugin_name"
           version="$(cat VERSION | tr -d '\r\n')"
           python3 packaging/verify-macos-bundle.py "$installed" "$version"
-          loader="$PWD/build/mac-tester/OrbitalPanPluginLoadTests_artefacts/Release/OrbitalPan Plugin Load Tests"
+          loader="$(cat build/mac-tester/generated/plugin-test-path-Release.txt)"
           arch -arm64 "$loader" "$installed" "$version"
           arch -x86_64 "$loader" "$installed" "$version"
           echo "name=$package_name.zip" >> "$GITHUB_OUTPUT"

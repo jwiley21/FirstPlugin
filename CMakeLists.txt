@@ -86,6 +86,10 @@ if (ORBITALPAN_BUILD_TESTS)
     add_dependencies(OrbitalPanPluginLoadTests OrbitalPan_VST3)
     add_test(NAME OrbitalPanPluginLoadTests COMMAND OrbitalPanPluginLoadTests
         "$<TARGET_GENEX_EVAL:OrbitalPan_VST3,$<TARGET_PROPERTY:OrbitalPan_VST3,JUCE_PLUGIN_ARTEFACT_FILE>>" "${PROJECT_VERSION}")
+    file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/generated/audio-test-path-$<CONFIG>.txt"
+        CONTENT "$<TARGET_FILE:OrbitalPanTests>\n")
+    file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/generated/plugin-test-path-$<CONFIG>.txt"
+        CONTENT "$<TARGET_FILE:OrbitalPanPluginLoadTests>\n")
 endif()
 
 target_compile_features(OrbitalPan PUBLIC cxx_std_17)
